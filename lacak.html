@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Family Tracker Modern</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      background: #0f172a;
+      color: white;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: auto;
+    }
+
+    .card {
+      background: #1e293b;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    p {
+      opacity: 0.8;
+      margin-bottom: 15px;
+    }
+
+    button {
+      background: #2563eb;
+      border: none;
+      color: white;
+      padding: 12px 18px;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-right: 10px;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    #map {
+      height: 400px;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    video {
+      width: 100%;
+      border-radius: 14px;
+      margin-top: 15px;
+      background: black;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    .warning {
+      background: #7f1d1d;
+      padding: 12px;
+      border-radius: 10px;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    .camera-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      background: red;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      50% {
+        opacity: 0.2;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <div class="card">
+      <h1>Family Tracker Modern</h1>
+      <p>
+        Website modern untuk pairing keluarga, lokasi realtime, kamera depan/belakang, dan microphone dengan izin pengguna.
+      </p>
+
+      <div class="warning">
+        Fitur kamera dan lokasi harus digunakan dengan izin pengguna.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Lokasi Realtime</h2>
+      <button onclick="startTracking()">Mulai Tracking</button>
+      <div class="status" id="locationStatus">Belum mengambil lokasi...</div>
+      <div id="map"></div>
+    </div>
+
+    <div class="card">
+      <h2>Pairing Keluarga</h2>
+
+      <input id="pairCode" placeholder="Masukkan kode keluarga"
+      style="width:100%;padding:14px;border:none;border-radius:12px;background:#0f172a;color:white;margin-top:10px;">
+
+      <button onclick="connectFamily()">Hubungkan Device</button>
+
+      <div class="status" id="pairStatus">
+        Belum terhubung
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Akses Kamera</h2>
+      <button onclick="startFrontCamera()">Kamera Depan</button>
+      <button onclick="startBackCamera()">Kamera Belakang</button>
+      <button onclick="takePhoto()">Ambil Foto</button>
+      <button onclick="recordVideo()">Rekam Video</button>
+      <button onclick="stopCamera()">Matikan Kamera</button>
+      <button onclick="startMic()">Aktifkan Mic</button>
+      <button onclick="stopMic()">Matikan Mic</button>
+
+      <div class="status" id="cameraStatus">
+        Kamera belum aktif
+      </div>
+
+      <video id="video" autoplay playsinline muted></video>
+      <audio id="audio" autoplay></audio>
+
+      <canvas id="canvas" style="display:none"></canvas>
+
+      <div class="status" id="micStatus">
+        Microphone belum aktif
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    let map = L.map('map').setView([-6.2, 106.8], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let marker;
+    let watchId;
+
+    function startTracking() {
+      if (!navigator.geolocation) {
+        alert('Geolocation tidak didukung browser');
+        return;
+      }
+
+      document.getElementById('locationStatus').innerText = 'Mengambil lokasi realtime...';
+
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          document.getElementById('locationStatus').innerHTML = `
+            Latitude: ${lat}<br>
+            Longitude: ${lng}
+          `;
+
+          map.setView([lat, lng], 16);
+
+          if (!marker) {
+            marker = L.marker([lat, lng]).addTo(map);
+          } else {
+            marker.setLatLng([lat, lng]);
+          }
+
+          console.log('Lokasi realtime:', lat, lng);
+
+          // Di sini nanti bisa kirim ke Firebase/server
+          // contoh:
+          // fetch('/api/location', {
+          //   method: 'POST',
+          //   body: JSON.stringify({ lat, lng })
+          // })
+        },
+        (err) => {
+          console.error(err);
+          alert('Gagal mengambil lokasi');
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 5000
+        }
+      );
+    }
+
+    let stream;
+    let audioStream;
+    let currentFacingMode = 'user';
+
+    function connectFamily() {
+      const code = document.getElementById('pairCode').value;
+
+      if(code.length < 4){
+        alert('Masukkan kode pairing');
+        return;
+      }
+
+      document.getElementById('pairStatus').innerHTML = `🟢 Terhubung dengan kode: ${code}`;
+    }
+
+    async function startFrontCamera() {
+      currentFacingMode = 'user';
+      startCamera();
+    }
+
+    async function startBackCamera() {
+      currentFacingMode = 'environment';
+      startCamera();
+    }
+
+    async function startCamera() {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          alert('Browser tidak mendukung kamera atau website belum HTTPS');
+          return;
+        }
+
+        if(location.protocol !== 'https:' && location.hostname !== 'localhost'){
+          alert('Kamera hanya bisa digunakan di HTTPS. Upload ke Netlify/Vercel dulu.');
+          return;
+        }
+
+        if(stream){
+          stream.getTracks().forEach(track => track.stop());
+        }
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: currentFacingMode
+          },
+          audio: false
+        });
+
+        const video = document.getElementById('video');
+        video.srcObject = stream;
+
+        document.getElementById('cameraStatus').innerHTML = `
+          <span class="camera-indicator"></span>
+          Kamera aktif (${currentFacingMode === 'user' ? 'Depan' : 'Belakang'})
+        `;
+
+      } catch (error) {
+        console.error(error);
+
+        if(error.name === 'NotAllowedError'){
+          alert('Izin kamera ditolak browser');
+        }else if(error.name === 'NotFoundError'){
+          alert('Kamera tidak ditemukan di device');
+        }else if(error.name === 'NotReadableError'){
+          alert('Kamera sedang digunakan aplikasi lain');
+        }else{
+          alert('Gagal mengakses kamera: ' + error.message);
+        }
+      }
+    }
+
+    function takePhoto(){
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      ctx.drawImage(video, 0, 0);
+
+      const image = canvas.toDataURL('image/png');
+
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = 'photo.png';
+      link.click();
+    }
+
+    function recordVideo(){
+      alert('Fitur rekam video siap ditambahkan menggunakan MediaRecorder API');
+    }
+
+    async function startMic(){
+      try{
+        audioStream = await navigator.mediaDevices.getUserMedia({
+          audio:true
+        });
+
+        document.getElementById('micStatus').innerHTML = `
+          <span class="camera-indicator"></span>
+          Microphone aktif
+        `;
+
+      }catch(err){
+        alert('Microphone tidak diizinkan');
+      }
+    }
+
+    function stopMic(){
+      if(audioStream){
+        audioStream.getTracks().forEach(track => track.stop());
+      }
+
+      document.getElementById('micStatus').innerHTML = 'Microphone dimatikan';
+    }
+
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+
+      document.getElementById('video').srcObject = null;
+
+      document.getElementById('cameraStatus').innerHTML = 'Kamera dimatikan';
+    }
+  </script>
+
+</body>
+</html>
